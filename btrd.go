@@ -115,7 +115,7 @@ func (a *ADC) ReadValue() error {
 		log.Fatal(err)
 	}
 	parameters := make(map[string]interface{}, 8)
-	parameters["ADCval"] = float64(val[0])
+	parameters["adcval"] = float64(val[0])
 	parameters["vref"] = float64(a.Vref)
 	result, err := expr.Evaluate(parameters)
 	if err != nil {
