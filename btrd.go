@@ -10,20 +10,21 @@ import (
 	"github.com/tarm/serial"
 )
 
-// Adc is Analog to Digital Converter item.
+// ADC is Analog to Digital Converter item.
 // Vref - Volatge Reference
-// Expr - String expression for calculation Adc.value
-// It's function f(adcval, vref), where adcval will get 8bit level value (0-255)
-// from ADC and vref will be replaced with Adc.Vref.
-// For example, Adc.Expr = "adcval * (vref / 256)"
+// Expr - String expression for calculation ADC.Value
+// It's function f(ADCval, vref), where ADCval will get 8bit level value (0-255)
+// from ADC and vref will be replaced with ADC.Vref.
+// For example, ADC.Expr = "ADCval * (vref / 256)"
 // Cmdget is communication comand for getting the measurement result from ADC.
-type Adc struct {
-	ID     string `toml:"id"`
-	value  float64
+type ADC struct {
+	ID     string  `toml:"id"`
 	Vref   float64 `toml:"vref"`
 	Cmdget string  `toml:"cmdget"`
 	Expr   string  `toml:"expr"`
 	*Btdev
+	sync.RWMutex
+	value float64
 }
 
 // Tmpt is temperature sensor item (ds18b20 sensor)
@@ -31,10 +32,11 @@ type Adc struct {
 // and most significant bits (MSB) of result from sensor.
 type Tmpt struct {
 	ID     string `toml:"id"`
-	value  float64
 	Cmdlsb string `toml:"cmdlsb"`
 	Cmdmsb string `toml:"cmdmsb"`
 	*Btdev
+	sync.RWMutex
+	value float64
 }
 
 // Swt is two-state switch item.
@@ -42,14 +44,33 @@ type Tmpt struct {
 // Cmdclr is communication comand for clearing state of switch.
 type Swt struct {
 	ID     string `toml:"id"`
-	value  int
 	Cmdget string `toml:"cmdget"`
 	Cmdset string `toml:"cmdset"`
 	Cmdclr string `toml:"cmdclr"`
 	*Btdev
+	sync.RWMutex
+	value int
 }
 
-type value interface {
+// Value method for getting ADC result
+func (a *ADC) Value() float64 {
+	a.RLock()
+	defer a.RUnlock()
+	return a.value
+}
+
+// Value method for getting Temperature result
+func (t *Tmpt) Value() float64 {
+	t.RLock()
+	defer t.RUnlock()
+	return t.value
+}
+
+// Value method for getting Switch status result
+func (sw *Swt) Value() int {
+	sw.RLock()
+	defer sw.RUnlock()
+	return sw.value
 }
 
 func getFloat(unkn interface{}) (float64, error) {
@@ -77,8 +98,8 @@ func ConvertTemp(msb byte, lsb byte) float64 {
 	return temp
 }
 
-// ReadValue is method for reading value from ADC to Adc.value
-func (a *Adc) ReadValue() error {
+// ReadValue is method for reading value from ADC to ADC.value
+func (a *ADC) ReadValue() error {
 	if _, err := a.serport.Write([]byte(a.Cmdget)); err != nil {
 		log.Printf("Serial port %s write error", a.Devfile)
 		return err
@@ -94,12 +115,14 @@ func (a *Adc) ReadValue() error {
 		log.Fatal(err)
 	}
 	parameters := make(map[string]interface{}, 8)
-	parameters["adcval"] = float64(val[0])
+	parameters["ADCval"] = float64(val[0])
 	parameters["vref"] = float64(a.Vref)
 	result, err := expr.Evaluate(parameters)
 	if err != nil {
 		log.Fatal(err)
 	}
+	a.Lock()
+	defer a.Unlock()
 	a.value, err = getFloat(result)
 	if err != nil {
 		log.Fatal(err)
@@ -127,6 +150,8 @@ func (t *Tmpt) ReadValue() error {
 		log.Printf("Serial port %s read error", t.Devfile)
 		return err
 	}
+	t.Lock()
+	defer t.Unlock()
 	t.value = ConvertTemp(msb[0], lsb[0])
 	return nil
 }
@@ -146,6 +171,8 @@ func (sw *Swt) ReadValue() error {
 		log.Println("Wrong value of switch:", res[0])
 		return errors.New("Wrong value of switch")
 	}
+	sw.Lock()
+	defer sw.Unlock()
 	sw.value = int(res[0])
 	return nil
 }
@@ -190,14 +217,13 @@ func (sw *Swt) ClearBit() error {
 // Devfile is path to file of serial port
 // with certain Baud rate.
 type Btdev struct {
-	ID           string
-	Devfile      string `toml:"devfile"`
-	Baud         int    `toml:"baud"`
-	serport      *serial.Port
-	Adcs         []*Adc  `toml:"adcs"`
-	Tmpts        []*Tmpt `toml:"tmpts"`
-	Swts         []*Swt  `toml:"swts"`
-	serportMutex *sync.Mutex
+	ID      string
+	Devfile string  `toml:"devfile"`
+	Baud    int     `toml:"baud"`
+	ADCs    []*ADC  `toml:"ADCs"`
+	Tmpts   []*Tmpt `toml:"tmpts"`
+	Swts    []*Swt  `toml:"swts"`
+	serport *serial.Port
 }
 
 // OpenPort method for opening port of remote device
