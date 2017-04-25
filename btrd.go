@@ -23,8 +23,8 @@ type ADC struct {
 	Cmdget string  `toml:"cmdget"`
 	Expr   string  `toml:"expr"`
 	*Btdev
-	sync.RWMutex
-	value float64
+	valmux sync.RWMutex
+	value  float64
 }
 
 // Tmpt is temperature sensor item (ds18b20 sensor)
@@ -35,8 +35,8 @@ type Tmpt struct {
 	Cmdlsb string `toml:"cmdlsb"`
 	Cmdmsb string `toml:"cmdmsb"`
 	*Btdev
-	sync.RWMutex
-	value float64
+	valmux sync.RWMutex
+	value  float64
 }
 
 // Swt is two-state switch item.
@@ -48,28 +48,28 @@ type Swt struct {
 	Cmdset string `toml:"cmdset"`
 	Cmdclr string `toml:"cmdclr"`
 	*Btdev
-	sync.RWMutex
-	value int
+	valmux sync.RWMutex
+	value  int
 }
 
 // Value method for getting ADC result
 func (a *ADC) Value() float64 {
-	a.RLock()
-	defer a.RUnlock()
+	a.valmux.RLock()
+	defer a.valmux.RUnlock()
 	return a.value
 }
 
 // Value method for getting Temperature result
 func (t *Tmpt) Value() float64 {
-	t.RLock()
-	defer t.RUnlock()
+	t.valmux.RLock()
+	defer t.valmux.RUnlock()
 	return t.value
 }
 
 // Value method for getting Switch status result
 func (sw *Swt) Value() int {
-	sw.RLock()
-	defer sw.RUnlock()
+	sw.valmux.RLock()
+	defer sw.valmux.RUnlock()
 	return sw.value
 }
 
@@ -121,8 +121,8 @@ func (a *ADC) ReadValue() error {
 	if err != nil {
 		log.Fatal(err)
 	}
-	a.Lock()
-	defer a.Unlock()
+	a.valmux.Lock()
+	defer a.valmux.Unlock()
 	a.value, err = getFloat(result)
 	if err != nil {
 		log.Fatal(err)
@@ -150,8 +150,8 @@ func (t *Tmpt) ReadValue() error {
 		log.Printf("Serial port %s read error", t.Devfile)
 		return err
 	}
-	t.Lock()
-	defer t.Unlock()
+	t.valmux.Lock()
+	defer t.valmux.Unlock()
 	t.value = ConvertTemp(msb[0], lsb[0])
 	return nil
 }
@@ -171,8 +171,8 @@ func (sw *Swt) ReadValue() error {
 		log.Println("Wrong value of switch:", res[0])
 		return errors.New("Wrong value of switch")
 	}
-	sw.Lock()
-	defer sw.Unlock()
+	sw.valmux.Lock()
+	defer sw.valmux.Unlock()
 	sw.value = int(res[0])
 	return nil
 }
