@@ -2,7 +2,7 @@ package btrd
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"math"
 	"sync"
 
@@ -101,31 +101,33 @@ func ConvertTemp(msb byte, lsb byte) float64 {
 // ReadValue is method for reading value from ADC to ADC.value
 func (a *ADC) ReadValue() error {
 	if _, err := a.serport.Write([]byte(a.Cmdget)); err != nil {
-		log.Printf("Serial port %s write error", a.Devfile)
+		err = fmt.Errorf("Serial port %s write error: %s", a.Devfile, err)
 		return err
 	}
 	val := make([]byte, 1)
 	if _, err := a.serport.Read(val); err != nil {
-		log.Printf("Serial port %s read error", a.Devfile)
+		err = fmt.Errorf("Serial port %s read error: %s", a.Devfile, err)
 		return err
 	}
 
 	expr, err := govaluate.NewEvaluableExpression(a.Expr)
 	if err != nil {
-		log.Fatal(err)
+		err = fmt.Errorf("Expression parsing error: %s", err)
+		return err
 	}
 	parameters := make(map[string]interface{}, 8)
 	parameters["adcval"] = float64(val[0])
 	parameters["vref"] = float64(a.Vref)
 	result, err := expr.Evaluate(parameters)
 	if err != nil {
-		log.Fatal(err)
+		err = fmt.Errorf("Expression parsing error: %s", err)
+		return err
 	}
 	a.valmux.Lock()
 	defer a.valmux.Unlock()
 	a.value, err = getFloat(result)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	return nil
 }
@@ -133,21 +135,21 @@ func (a *ADC) ReadValue() error {
 // ReadValue is method for reading value from temperature sensor to Tmpt.value
 func (t *Tmpt) ReadValue() error {
 	if _, err := t.serport.Write([]byte(t.Cmdlsb)); err != nil {
-		log.Printf("Serial port %s write error", t.Devfile)
+		err = fmt.Errorf("Serial port %s write error: %s", t.Devfile, err)
 		return err
 	}
 	lsb := make([]byte, 1)
 	if _, err := t.serport.Read(lsb); err != nil {
-		log.Printf("Serial port %s read error", t.Devfile)
+		err = fmt.Errorf("Serial port %s read error: %s", t.Devfile, err)
 		return err
 	}
 	if _, err := t.serport.Write([]byte(t.Cmdmsb)); err != nil {
-		log.Printf("Serial port %s write error", t.Devfile)
+		err = fmt.Errorf("Serial port %s write error: %s", t.Devfile, err)
 		return err
 	}
 	msb := make([]byte, 1)
 	if _, err := t.serport.Read(msb); err != nil {
-		log.Printf("Serial port %s read error", t.Devfile)
+		err = fmt.Errorf("Serial port %s read error: %s", t.Devfile, err)
 		return err
 	}
 	t.valmux.Lock()
@@ -159,17 +161,17 @@ func (t *Tmpt) ReadValue() error {
 // ReadValue is method for reading value from switch item to Swt.value
 func (sw *Swt) ReadValue() error {
 	if _, err := sw.serport.Write([]byte(sw.Cmdget)); err != nil {
-		log.Printf("Serial port %s write error", sw.Devfile)
+		err = fmt.Errorf("Serial port %s write error: %s", sw.Devfile, err)
 		return err
 	}
 	res := make([]byte, 1)
 	if _, err := sw.serport.Read(res); err != nil {
-		log.Printf("Serial port %s read error", sw.Devfile)
+		err = fmt.Errorf("Serial port %s read error: %s", sw.Devfile, err)
 		return err
 	}
 	if (res[0] != 0) && (res[0] != 1) {
-		log.Println("Wrong value of switch:", res[0])
-		return errors.New("Wrong value of switch")
+		err := fmt.Errorf("Wrong value of switch %s: %b", sw.ID, res[0])
+		return err
 	}
 	sw.valmux.Lock()
 	defer sw.valmux.Unlock()
@@ -180,17 +182,17 @@ func (sw *Swt) ReadValue() error {
 // SetBit method set state of switch item to 1
 func (sw *Swt) SetBit() error {
 	if _, err := sw.serport.Write([]byte(sw.Cmdset)); err != nil {
-		log.Printf("Serial port %s write error", sw.Devfile)
+		err = fmt.Errorf("Serial port %s write error: %s", sw.Devfile, err)
 		return err
 	}
 	res := make([]byte, 1)
 	if _, err := sw.serport.Read(res); err != nil {
-		log.Printf("Serial port %s read error", sw.Devfile)
+		err = fmt.Errorf("Serial port %s read error: %s", sw.Devfile, err)
 		return err
 	}
 	if res[0] != 'K' {
-		log.Printf("Error occurred during setting %s switch bit", sw.ID)
-		return errors.New("Error occurred during setting switch bit")
+		err := fmt.Errorf("Error occurred during setting %s switch bit. Answer is not K.", sw.ID)
+		return err
 	}
 	return nil
 }
@@ -198,17 +200,17 @@ func (sw *Swt) SetBit() error {
 // ClearBit method clear state of switch item to 0
 func (sw *Swt) ClearBit() error {
 	if _, err := sw.serport.Write([]byte(sw.Cmdclr)); err != nil {
-		log.Printf("Serial port %s write error", sw.Devfile)
+		err = fmt.Errorf("Serial port %s write error: %s", sw.Devfile, err)
 		return err
 	}
 	res := make([]byte, 1)
 	if _, err := sw.serport.Read(res); err != nil {
-		log.Printf("Serial port %s read error", sw.Devfile)
+		err = fmt.Errorf("Serial port %s read error: %s", sw.Devfile, err)
 		return err
 	}
 	if res[0] != 'K' {
-		log.Printf("Error occurred during clearing %s switch bit", sw.ID)
-		return errors.New("Error occurred clearing setting switch bit")
+		err := fmt.Errorf("Error occurred during setting %s switch bit. Answer is not K.", sw.ID)
+		return err
 	}
 	return nil
 }
@@ -227,13 +229,15 @@ type Btdev struct {
 }
 
 // OpenPort method for opening port of remote device
-func (btd *Btdev) OpenPort() {
+func (btd *Btdev) OpenPort() error {
 	c := &serial.Config{Name: btd.Devfile, Baud: btd.Baud}
 	serport, err := serial.OpenPort(c)
 	if err != nil {
-		log.Println("Btdev open serial port problem:", err)
+		err = fmt.Errorf("Btdev %s open serial port problem: %s", btd.ID, err)
+		return err
 	}
 	btd.serport = serport
+	return nil
 }
 
 // ClosePort method for opening port of remote device
