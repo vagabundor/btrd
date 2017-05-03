@@ -100,6 +100,8 @@ func ConvertTemp(msb byte, lsb byte) float64 {
 
 // ReadValue is method for reading value from ADC to ADC.value
 func (a *ADC) ReadValue() error {
+	a.sermux.Lock()
+	defer a.sermux.Unlock()
 	if _, err := a.serport.Write([]byte(a.Cmdget)); err != nil {
 		err = fmt.Errorf("Serial port %s write error: %s", a.Devfile, err)
 		return err
@@ -134,6 +136,8 @@ func (a *ADC) ReadValue() error {
 
 // ReadValue is method for reading value from temperature sensor to Tmpt.value
 func (t *Tmpt) ReadValue() error {
+	t.sermux.Lock()
+	defer t.sermux.Unlock()
 	if _, err := t.serport.Write([]byte(t.Cmdlsb)); err != nil {
 		err = fmt.Errorf("Serial port %s write error: %s", t.Devfile, err)
 		return err
@@ -160,6 +164,8 @@ func (t *Tmpt) ReadValue() error {
 
 // ReadValue is method for reading value from switch item to Swt.value
 func (sw *Swt) ReadValue() error {
+	sw.sermux.Lock()
+	defer sw.sermux.Unlock()
 	if _, err := sw.serport.Write([]byte(sw.Cmdget)); err != nil {
 		err = fmt.Errorf("Serial port %s write error: %s", sw.Devfile, err)
 		return err
@@ -181,6 +187,8 @@ func (sw *Swt) ReadValue() error {
 
 // SetBit method set state of switch item to 1
 func (sw *Swt) SetBit() error {
+	sw.sermux.Lock()
+	defer sw.sermux.Unlock()
 	if _, err := sw.serport.Write([]byte(sw.Cmdset)); err != nil {
 		err = fmt.Errorf("Serial port %s write error: %s", sw.Devfile, err)
 		return err
@@ -199,6 +207,8 @@ func (sw *Swt) SetBit() error {
 
 // ClearBit method clear state of switch item to 0
 func (sw *Swt) ClearBit() error {
+	sw.sermux.Lock()
+	defer sw.sermux.Unlock()
 	if _, err := sw.serport.Write([]byte(sw.Cmdclr)); err != nil {
 		err = fmt.Errorf("Serial port %s write error: %s", sw.Devfile, err)
 		return err
@@ -226,6 +236,7 @@ type Btdev struct {
 	Tmpts   []*Tmpt `toml:"tmpts"`
 	Swts    []*Swt  `toml:"swts"`
 	serport *serial.Port
+	sermux  sync.Mutex
 }
 
 // OpenPort method for opening port of remote device
