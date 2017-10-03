@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/Knetic/govaluate"
 	"github.com/tarm/serial"
@@ -241,7 +242,7 @@ type Btdev struct {
 
 // OpenPort method for opening port of remote device
 func (btd *Btdev) OpenPort() error {
-	c := &serial.Config{Name: btd.Devfile, Baud: btd.Baud}
+	c := &serial.Config{Name: btd.Devfile, Baud: btd.Baud, ReadTimeout: time.Second * 5}
 	serport, err := serial.OpenPort(c)
 	if err != nil {
 		err = fmt.Errorf("Btdev %s open serial port problem: %s", btd.ID, err)
